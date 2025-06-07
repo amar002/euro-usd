@@ -11,11 +11,17 @@ api_key = st.secrets["ALPHA_VANTAGE_KEY"] if "ALPHA_VANTAGE_KEY" in st.secrets e
 
 @st.cache_data(ttl=300)
 def fetch_fx_intraday(symbol_from, symbol_to):
-    url = f"https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol={symbol_from}&to_symbol={symbol_to}&interval=15min&outputsize=compact&apikey={api_key}"
+    url = f"https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol={symbol_from}&to_symbol={symbol_to}&interval=60min&outputsize=compact&apikey={api_key}"
     response = requests.get(url).json()
-    data = response.get("Time Series FX (15min)")
+    
+    # Debug: Show full API response in Streamlit
+    st.subheader("Raw EUR/USD API Response (Debug)")
+    st.json(response)
+
+    data = response.get("Time Series FX (60min)")
     if not data:
         return pd.DataFrame()
+    
     df = pd.DataFrame.from_dict(data, orient='index')
     df.columns = ["open", "high", "low", "close"]
     df = df.astype(float).sort_index()
@@ -23,11 +29,12 @@ def fetch_fx_intraday(symbol_from, symbol_to):
 
 @st.cache_data(ttl=300)
 def fetch_dxy_intraday():
-    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=UUP&interval=15min&outputsize=compact&apikey={api_key}"
+    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=UUP&interval=60min&outputsize=compact&apikey={api_key}"
     response = requests.get(url).json()
-    data = response.get("Time Series (15min)")
+    data = response.get("Time Series (60min)")
     if not data:
         return pd.DataFrame()
+    
     df = pd.DataFrame.from_dict(data, orient='index')
     df.columns = ["open", "high", "low", "close", "volume"]
     df = df.astype(float).sort_index()
@@ -40,7 +47,7 @@ if api_key:
     dxy = fetch_dxy_intraday()
 
     with col1:
-        st.subheader("EUR/USD (15min)")
+        st.subheader("EUR/USD (60min)")
         if eurusd.empty:
             st.warning("⚠️ Failed to fetch EUR/USD data.")
         else:
@@ -49,7 +56,7 @@ if api_key:
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        st.subheader("DXY Proxy via UUP ETF (15min)")
+        st.subheader("DXY Proxy via UUP ETF (60min)")
         if dxy.empty:
             st.warning("⚠️ Failed to fetch DXY data.")
         else:
