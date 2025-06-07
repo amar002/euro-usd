@@ -1,36 +1,38 @@
-import streamlit as st
-import yfinance as yf
-import plotly.graph_objs as go
+import numpy as np
 
-st.set_page_config(page_title="ICT SMT Divergence Dashboard", layout="wide")
-st.title("📊 ICT SMT Divergence Detector (EUR/USD vs DXY)")
+# Utility to find local highs/lows
+def find_local_extrema(series, window=3):
+    lows = (series.shift(1) > series) & (series.shift(-1) > series)
+    highs = (series.shift(1) < series) & (series.shift(-1) < series)
+    return series[lows], series[highs]
 
-@st.cache_data(ttl=900)
-def fetch_data(ticker, period="2d", interval="60m"):
-    df = yf.download(tickers=ticker, period=period, interval=interval)
-    df = df[['Close']].rename(columns={'Close': ticker})
-    return df
+# Detect SMT Divergence between EUR/USD and DXY
+def detect_smt_divergence(eur_df, dxy_df):
+    signal_log = []
 
-# Fetch EUR/USD and DXY data
-eurusd = fetch_data("EURUSD=X")
-dxy = fetch_data("DX-Y.NYB")
+    eur_lows, eur_highs = find_local_extrema(eur_df["EURUSD=X"])
+    dxy_lows, dxy_highs = find_local_extrema(dxy_df["DX-Y.NYB"])
 
-col1, col2 = st.columns(2)
+    if len(eur_lows) < 2 or len(eur_highs) < 2 or len(dxy_lows) < 2 or len(dxy_highs) < 2:
+        return signal_log  # not enough data
 
-with col1:
-    st.subheader("EUR/USD (60min)")
-    if eurusd.empty:
-        st.warning("⚠️ Could not fetch EUR/USD data.")
-    else:
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=eurusd.index, y=eurusd["EURUSD=X"], mode='lines+markers', name="EUR/USD"))
-        st.plotly_chart(fig1, use_container_width=True)
+    # Get most recent two lows/highs
+    eur_low_recent = eur_lows.iloc[-1]
+    eur_low_prev = eur_lows.iloc[-2]
+    dxy_high_recent = dxy_highs.iloc[-1]
+    dxy_high_prev = dxy_highs.iloc[-2]
 
-with col2:
-    st.subheader("DXY (60min)")
-    if dxy.empty:
-        st.warning("⚠️ Could not fetch DXY data.")
-    else:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=dxy.index, y=dxy["DX-Y.NYB"], mode='lines+markers', name="DXY"))
-        st.plotly_chart(fig2, use_container_width=True)
+    eur_high_recent = eur_highs.iloc[-1]
+    eur_high_prev = eur_highs.iloc[-2]
+    dxy_low_recent = dxy_lows.iloc[-1]
+    dxy_low_prev = dxy_lows.iloc[-2]
+
+    # Bullish Divergence
+    if eur_low_recent < eur_low_prev and dxy_high_recent < dxy_high_prev:
+        signal_log.append(("Bullish SMT Divergence", eur_lows.index[-1]))
+
+    # Bearish Divergence
+    if eur_high_recent > eur_high_prev and dxy_low_recent > dxy_low_prev:
+        signal_log.append(("Bearish SMT Divergence", eur_highs.index[-1]))
+
+    return signal_log
