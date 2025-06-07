@@ -34,17 +34,25 @@ def detect_smt_divergence(eur_df, dxy_df):
     eur_lows, eur_highs = find_local_extrema(eur_df["EURUSD=X"])
     dxy_lows, dxy_highs = find_local_extrema(dxy_df["DX-Y.NYB"])
 
+    if eur_lows.empty or eur_highs.empty or dxy_lows.empty or dxy_highs.empty:
+        return signal_log
     if len(eur_lows) < 2 or len(eur_highs) < 2 or len(dxy_lows) < 2 or len(dxy_highs) < 2:
         return signal_log
 
-    eur_low_recent, eur_low_prev = eur_lows.iloc[-1], eur_lows.iloc[-2]
-    dxy_high_recent, dxy_high_prev = dxy_highs.iloc[-1], dxy_highs.iloc[-2]
+    # Extract scalar values (no ambiguity errors)
+    eur_low_recent = eur_lows.values[-1]
+    eur_low_prev = eur_lows.values[-2]
+    dxy_high_recent = dxy_highs.values[-1]
+    dxy_high_prev = dxy_highs.values[-2]
 
-    eur_high_recent, eur_high_prev = eur_highs.iloc[-1], eur_highs.iloc[-2]
-    dxy_low_recent, dxy_low_prev = dxy_lows.iloc[-1], dxy_lows.iloc[-2]
+    eur_high_recent = eur_highs.values[-1]
+    eur_high_prev = eur_highs.values[-2]
+    dxy_low_recent = dxy_lows.values[-1]
+    dxy_low_prev = dxy_lows.values[-2]
 
     if eur_low_recent < eur_low_prev and dxy_high_recent < dxy_high_prev:
         signal_log.append(("Bullish SMT Divergence", eur_lows.index[-1]))
+
     if eur_high_recent > eur_high_prev and dxy_low_recent > dxy_low_prev:
         signal_log.append(("Bearish SMT Divergence", eur_highs.index[-1]))
 
@@ -97,7 +105,7 @@ with col2:
         fig2.update_yaxes(tickformat=".2f")
         st.plotly_chart(fig2, use_container_width=True)
 
-# -------- SMT Signal Panel --------
+# -------- SMT Signal Output --------
 st.subheader("📌 SMT Divergence Signals")
 signals = detect_smt_divergence(eurusd, dxy)
 
