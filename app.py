@@ -7,27 +7,23 @@ import plotly.graph_objs as go
 st.set_page_config(page_title="ICT SMT Divergence Dashboard", layout="wide")
 st.title("📊 ICT SMT Divergence Detector (EUR/USD vs DXY)")
 
+# -------- Fetch & Clean Data --------
 @st.cache_data(ttl=900)
-def fetch_data(ticker, period="2d", interval="60m"):
-    df = yf.download(tickers=ticker, period=period, interval=interval)
-    df = df[['Close']].rename(columns={'Close': ticker})
+def fetch_data(ticker: str):
+    df = yf.download(ticker, period="5d", interval="60m", progress=False)
+    df = df[['Close']].dropna().rename(columns={"Close": ticker})
+    df.index = pd.to_datetime(df.index)
     return df
 
-# Fetch and clean data
 eurusd = fetch_data("EURUSD=X")
 dxy = fetch_data("DX-Y.NYB")
 
-eurusd.index = pd.to_datetime(eurusd.index)
-dxy.index = pd.to_datetime(dxy.index)
-
-eurusd = eurusd.resample("60min").last().dropna()
-dxy = dxy.resample("60min").last().dropna()
-
+# Align both on same timestamps
 common_index = eurusd.index.intersection(dxy.index)
 eurusd = eurusd.loc[common_index]
 dxy = dxy.loc[common_index]
 
-# SMT divergence logic
+# -------- SMT Divergence Detection --------
 def find_local_extrema(series, window=3):
     lows = (series.shift(1) > series) & (series.shift(-1) > series)
     highs = (series.shift(1) < series) & (series.shift(-1) < series)
@@ -54,19 +50,18 @@ def detect_smt_divergence(eur_df, dxy_df):
 
     return signal_log
 
-# Plotting
+# -------- Plot Charts --------
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("EUR/USD (60min)")
-    if eurusd.empty:
-        st.warning("⚠️ Could not fetch EUR/USD data.")
+    if eurusd.shape[0] < 3:
+        st.warning("⚠️ Not enough EUR/USD data points to plot.")
     else:
-        eur_plot_df = eurusd.dropna()
         fig1 = go.Figure()
         fig1.add_trace(go.Scatter(
-            x=eur_plot_df.index,
-            y=eur_plot_df["EURUSD=X"],
+            x=eurusd.index,
+            y=eurusd["EURUSD=X"],
             mode='lines+markers',
             name="EUR/USD",
             line=dict(color='cyan')
@@ -82,14 +77,13 @@ with col1:
 
 with col2:
     st.subheader("DXY (60min)")
-    if dxy.empty:
-        st.warning("⚠️ Could not fetch DXY data.")
+    if dxy.shape[0] < 3:
+        st.warning("⚠️ Not enough DXY data points to plot.")
     else:
-        dxy_plot_df = dxy.dropna()
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(
-            x=dxy_plot_df.index,
-            y=dxy_plot_df["DX-Y.NYB"],
+            x=dxy.index,
+            y=dxy["DX-Y.NYB"],
             mode='lines+markers',
             name="DXY",
             line=dict(color='orange')
@@ -103,7 +97,7 @@ with col2:
         fig2.update_yaxes(tickformat=".2f")
         st.plotly_chart(fig2, use_container_width=True)
 
-# SMT Signal Output
+# -------- SMT Signal Panel --------
 st.subheader("📌 SMT Divergence Signals")
 signals = detect_smt_divergence(eurusd, dxy)
 
