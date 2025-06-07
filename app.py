@@ -1,4 +1,21 @@
+import streamlit as st
+import yfinance as yf
+import pandas as pd
 import numpy as np
+import plotly.graph_objs as go
+
+st.set_page_config(page_title="ICT SMT Divergence Dashboard", layout="wide")
+st.title("📊 ICT SMT Divergence Detector (EUR/USD vs DXY)")
+
+@st.cache_data(ttl=900)
+def fetch_data(ticker, period="2d", interval="60m"):
+    df = yf.download(tickers=ticker, period=period, interval=interval)
+    df = df[['Close']].rename(columns={'Close': ticker})
+    return df
+
+# Fetch EUR/USD and DXY data
+eurusd = fetch_data("EURUSD=X")
+dxy = fetch_data("DX-Y.NYB")
 
 # Utility to find local highs/lows
 def find_local_extrema(series, window=3):
@@ -16,7 +33,6 @@ def detect_smt_divergence(eur_df, dxy_df):
     if len(eur_lows) < 2 or len(eur_highs) < 2 or len(dxy_lows) < 2 or len(dxy_highs) < 2:
         return signal_log  # not enough data
 
-    # Get most recent two lows/highs
     eur_low_recent = eur_lows.iloc[-1]
     eur_low_prev = eur_lows.iloc[-2]
     dxy_high_recent = dxy_highs.iloc[-1]
@@ -36,3 +52,37 @@ def detect_smt_divergence(eur_df, dxy_df):
         signal_log.append(("Bearish SMT Divergence", eur_highs.index[-1]))
 
     return signal_log
+
+# Layout: Charts
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("EUR/USD (60min)")
+    if eurusd.empty:
+        st.warning("⚠️ Could not fetch EUR/USD data.")
+    else:
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(x=eurusd.index, y=eurusd["EURUSD=X"], mode='lines', name="EUR/USD"))
+        fig1.update_layout(margin=dict(t=10, b=10))
+        st.plotly_chart(fig1, use_container_width=True)
+
+with col2:
+    st.subheader("DXY (60min)")
+    if dxy.empty:
+        st.warning("⚠️ Could not fetch DXY data.")
+    else:
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=dxy.index, y=dxy["DX-Y.NYB"], mode='lines', name="DXY"))
+        fig2.update_layout(margin=dict(t=10, b=10))
+        st.plotly_chart(fig2, use_container_width=True)
+
+# SMT Signals
+st.subheader("📌 SMT Divergence Signals")
+
+signals = detect_smt_divergence(eurusd, dxy)
+
+if not signals:
+    st.info("No SMT divergence detected in the most recent data.")
+else:
+    for signal_type, signal_time in signals:
+        st.success(f"{signal_type} detected at {signal_time.strftime('%Y-%m-%d %H:%M')}")
